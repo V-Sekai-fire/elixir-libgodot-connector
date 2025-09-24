@@ -56,14 +56,14 @@ public:
         if (func_libgodot_create_godot_instance == nullptr) {
             fprintf(stderr, "Error acquiring function: %s\n", dlerror());
             dlclose(handle);
-            handle == nullptr;
+            handle = nullptr;
             return;
         }
         *(void**)(&func_libgodot_destroy_godot_instance) = dlsym(handle, "libgodot_destroy_godot_instance");
         if (func_libgodot_destroy_godot_instance == nullptr) {
             fprintf(stderr, "Error acquiring function: %s\n", dlerror());
             dlclose(handle);
-            handle == nullptr;
+            handle = nullptr;
             return;
         }
     }
