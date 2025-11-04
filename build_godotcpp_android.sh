@@ -50,6 +50,7 @@ function godot_to_android_arch() {
 }
 
 target_build_type_dir="release"
+target_template="template_release"
 
 mkdir -p $GODOT_CPP_DIR
 
@@ -73,11 +74,13 @@ do
     template_dev)
         suffix="dev.$target_arch"
         target_build_type_dir="dev"
+        target_template="template_debug"
         scons gdextension_dir=$BUILD_GDEXTENSION_DIR arch=$target_arch platform=android dev_build=yes debug_symbols=yes target=template_debug generate_engine_classes_bindings=no
     ;;
     template_debug)
         suffix="$target_arch"
         target_build_type_dir="debug"
+        target_template="template_debug"
         scons gdextension_dir=$BUILD_GDEXTENSION_DIR arch=$target_arch platform=android target=$target
     ;;
     template_release)
@@ -90,7 +93,7 @@ do
     esac
 
     mkdir -p $prep_dir/$android_arch
-    cp -a $GODOT_CPP_DIR/bin/libgodot-cpp.android.$target.$suffix.a $prep_dir/$android_arch/libgodot-cpp.a
+    cp -a $GODOT_CPP_DIR/bin/libgodot-cpp.android.$target_template.$suffix.a $prep_dir/$android_arch/libgodot-cpp.a
 done
 
 # Prepare headers

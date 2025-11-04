@@ -13,6 +13,7 @@ BUILD_GODOT_CPP_DIR=$BUILD_DIR/godot-cpp
 host_system="$(uname -s)"
 host_arch="$(uname -m)"
 target="template_debug"
+target_template="template_debug"
 build_type="debug"
 suffix=""
 
@@ -69,6 +70,7 @@ template_debug)
 ;;
 template_release)
     build_type="release"
+    target_template="template_release"
     scons gdextension_dir=$BUILD_GDEXTENSION_DIR arch=arm64 ios_simulator=no platform=ios target=$target
     scons gdextension_dir=$BUILD_GDEXTENSION_DIR arch=universal ios_simulator=yes platform=ios target=$target
 ;;
@@ -96,8 +98,8 @@ cp -a $GODOT_CPP_DIR/include/* $headers_dir/
 cp -a $GODOT_CPP_DIR/gen/include/* $headers_dir/
 cp $BUILD_GDEXTENSION_DIR/gdextension_interface.h $headers_dir/
 
-cp -a $GODOT_CPP_DIR/bin/libgodot-cpp.ios.$target$suffix.arm64.a $arm64_dir/libgodot-cpp.a
-cp -a $GODOT_CPP_DIR/bin/libgodot-cpp.ios.$target$suffix.universal.simulator.a $universal_dir/libgodot-cpp.a
+cp -a $GODOT_CPP_DIR/bin/libgodot-cpp.ios.$target_template$suffix.arm64.a $arm64_dir/libgodot-cpp.a
+cp -a $GODOT_CPP_DIR/bin/libgodot-cpp.ios.$target_template$suffix.universal.simulator.a $universal_dir/libgodot-cpp.a
 
 # cd $headers_dir
 
