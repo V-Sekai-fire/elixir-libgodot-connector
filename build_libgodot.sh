@@ -107,6 +107,18 @@ done
 
 target_build_options="$target_build_options opengl3=yes"
 
+# macOS CI runners typically do not have MoltenVK SDK installed.
+# For our use-case (headless embedding), Vulkan is not required.
+if [ "$host_platform" = "macos" ]
+then
+    host_build_options="$host_build_options vulkan=no"
+fi
+
+if [ "$target_platform" = "macos" ]
+then
+    target_build_options="$target_build_options vulkan=no"
+fi
+
 if [ "$target_platform" = "ios" ]
 then
     target="template_release"
