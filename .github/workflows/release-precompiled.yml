@@ -31,6 +31,16 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Cache Homebrew downloads (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/Homebrew
+          key: homebrew-${{ runner.os }}-${{ github.ref_name }}
+          restore-keys: |
+            homebrew-${{ runner.os }}-
+
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -39,9 +49,13 @@ jobs:
             build-essential \
             clang \
             cmake \
+            erlang-base \
+            erlang-dev \
             pkg-config \
             python3 \
             scons \
+            libvulkan-dev \
+            vulkan-tools \
             git \
             zip \
             unzip
@@ -50,16 +64,19 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install cmake scons
+          # Vulkan on macOS is provided via MoltenVK.
+          # Keep this list conservative to avoid CI breakage from formula changes.
+          brew install cmake scons erlang molten-vk vulkan-headers vulkan-loader shaderc
 
       - name: Build libgodot
         run: |
-          ./build_libgodot.sh
+          ./build_libgodot.sh --release
 
       - name: Configure NIF build
         run: |
           cd samples/elixir_sample
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release
 
       - name: Build NIF (single job)
         run: |

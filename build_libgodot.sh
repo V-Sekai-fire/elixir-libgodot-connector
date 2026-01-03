@@ -107,18 +107,6 @@ done
 
 target_build_options="$target_build_options opengl3=yes"
 
-# macOS CI runners typically do not have MoltenVK SDK installed.
-# For our use-case (headless embedding), Vulkan is not required.
-if [ "$host_platform" = "macos" ]
-then
-    host_build_options="$host_build_options vulkan=no"
-fi
-
-if [ "$target_platform" = "macos" ]
-then
-    target_build_options="$target_build_options vulkan=no"
-fi
-
 if [ "$target_platform" = "ios" ]
 then
     target="template_release"
@@ -156,6 +144,23 @@ then
     fi
 fi
 
+# For desktop targets (macOS/Linux), default to building a shared library.
+# The host build still produces an editor executable, which is used for dumping the GDExtension API.
+if [ "$target_platform" != "ios" ] && [ "$target_platform" != "android" ]
+then
+    if [ "$library_type" = "auto" ]
+    then
+        library_type="shared_library"
+    fi
+    if [ "$library_type" = "static_library" ]
+    then
+        lib_suffix="a"
+        target_build_options="$target_build_options library_type=static_library"
+    elif [ "$library_type" = "shared_library" ]
+    then
+        target_build_options="$target_build_options library_type=shared_library"
+    fi
+fi
 
 if [ "$target_arch" = "" ]
 then
@@ -250,6 +255,14 @@ fi
 
 cd $GODOT_DIR
 scons p=$target_platform target=$target arch=$target_arch $target_build_options swappy=no
+
+# For desktop development and samples, expose a stable name under build/.
+if [ "$target_platform" = "$host_platform" ] && [ "$library_type" != "executable" ]
+then
+    mkdir -p $BUILD_DIR
+    rm -f $BUILD_DIR/libgodot.*
+    cp -vf $target_godot $BUILD_DIR/libgodot.$lib_suffix
+fi
 
 function godot_to_android_arch() {
     godot_arch="$1"
