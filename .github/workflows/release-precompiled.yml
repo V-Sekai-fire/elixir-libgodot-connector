@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -78,20 +79,17 @@ jobs:
 
       - name: Configure NIF build
         run: |
-          cd samples/elixir_sample
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release
 
       - name: Build NIF (single job)
         run: |
-          cd samples/elixir_sample
           cmake --build build --target libgodot_nif
 
       - name: Normalize and verify libgodot install name (macOS)
         if: runner.os == 'macOS'
         run: |
           set -euo pipefail
-          cd samples/elixir_sample
           # Ensure the packaged dylib does not keep Godot's original install name (bin/libgodot...).
           install_name_tool -id "@rpath/libgodot.dylib" "priv/libgodot.dylib"
           otool -D "priv/libgodot.dylib" | tail -n 1 | grep -F "@rpath/libgodot.dylib"
@@ -101,7 +99,6 @@ jobs:
           set -euo pipefail
           # Draft releases are created per-commit on main.
           VERSION="${GITHUB_SHA::7}"
-          cd samples/elixir_sample
 
           mkdir -p dist
 
@@ -131,4 +128,4 @@ jobs:
           name: "main-${{ github.sha }}"
           target_commitish: "${{ github.sha }}"
           files: |
-            samples/elixir_sample/dist/*.tar.gz
+            dist/*.tar.gz

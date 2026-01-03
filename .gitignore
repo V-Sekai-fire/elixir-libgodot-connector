@@ -4,9 +4,9 @@ libgodot_framework/libgodot.xcodeproj/project.xcworkspace/xcuserdata/
 libgodot_framework/libgodot/libgodot.a
 
 .DS_Store
-samples/elixir_sample/_build/
-samples/elixir_sample/priv/
-samples/elixir_sample/deps/
+_build/
+priv/
+deps/
 godot-cpp
 godot
 .DS_Store

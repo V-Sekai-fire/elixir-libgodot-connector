@@ -233,7 +233,7 @@ if [ ! -x $host_godot ] || [ $force_host_rebuild -eq 1 ]
 then
     rm -f $host_godot
     cd $GODOT_DIR
-    scons p=$host_platform target=$host_target $host_build_options
+    scons -j$cpus p=$host_platform target=$host_target $host_build_options
     cp -vf $host_godot $BUILD_DIR/godot
 fi
 
@@ -254,7 +254,7 @@ then
 fi
 
 cd $GODOT_DIR
-scons p=$target_platform target=$target arch=$target_arch $target_build_options swappy=no
+scons -j$cpus p=$target_platform target=$target arch=$target_arch $target_build_options swappy=no
 
 # For desktop development and samples, expose a stable name under build/.
 if [ "$target_platform" = "$host_platform" ] && [ "$library_type" != "executable" ]
