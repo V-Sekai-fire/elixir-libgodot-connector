@@ -65,11 +65,21 @@ if(NOT EXISTS "${LIBGODOT_SOURCE_PATH}")
   message(FATAL_ERROR "Missing libgodot at '${LIBGODOT_SOURCE_PATH}'. Build it first (from repo root run ./build_libgodot.sh) or use precompiled artefacts via elixir_make.")
 endif()
 
-add_custom_command(
-  TARGET libgodot_nif POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LIBGODOT_SOURCE_PATH}" "${LIBGODOT_DEST_PATH}"
-  VERBATIM
-)
+if(APPLE)
+  add_custom_command(
+    TARGET libgodot_nif POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LIBGODOT_SOURCE_PATH}" "${LIBGODOT_DEST_PATH}"
+    # Normalize the install name so it doesn't refer to Godot's bin/ path.
+    COMMAND install_name_tool -id "@rpath/libgodot.dylib" "${LIBGODOT_DEST_PATH}"
+    VERBATIM
+  )
+else()
+  add_custom_command(
+    TARGET libgodot_nif POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LIBGODOT_SOURCE_PATH}" "${LIBGODOT_DEST_PATH}"
+    VERBATIM
+  )
+endif()
 
 if(APPLE)
   # Equivalent to: -undefined dynamic_lookup
