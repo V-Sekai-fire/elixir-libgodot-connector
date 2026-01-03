@@ -1,4 +1,4 @@
-defmodule LibGodotSample.Pinger do
+defmodule LibGodotConnector.Pinger do
   use GenServer
 
   @default_interval_ms 1_000
@@ -10,7 +10,7 @@ defmodule LibGodotSample.Pinger do
   @impl true
   def init(opts) do
     state = %{
-      server: Keyword.get(opts, :server, LibGodotSample.Godot),
+      server: Keyword.get(opts, :server, LibGodotConnector.Godot),
       interval_ms: Keyword.get(opts, :interval_ms, @default_interval_ms),
       n: 0
     }

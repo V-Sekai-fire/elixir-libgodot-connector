@@ -1,4 +1,4 @@
-# Elixir LibGodot Sample
+# LibGodotConnector (Elixir)
 
 This is a proof-of-concept showing how to interface Elixir with LibGodot using NIFs.
 
@@ -12,7 +12,37 @@ This is a proof-of-concept showing how to interface Elixir with LibGodot using N
 ## How to build
 
 1.  Ensure you have built `libgodot` in the root directory.
-2.  Build the NIF with CMake:
+2.  Build the NIF via Mix (recommended):
+
+```bash
+cd samples/elixir_sample
+mix deps.get
+mix compile
+```
+
+This uses `elixir_make` and the local `Makefile` to drive a CMake build.
+
+### Optional: use precompiled NIFs from GitHub Releases
+
+If you publish precompiled artefacts (tarballs) to GitHub Releases for the current version,
+`mix compile` can download them instead of building locally.
+
+```bash
+cd samples/elixir_sample
+mix compile
+```
+
+To override the default URL template, set `LIBGODOT_PRECOMPILED_URL` to a template containing
+`@{artefact_filename}`.
+
+To force a local build (skip download attempts):
+
+```bash
+export LIBGODOT_FORCE_BUILD=1
+mix compile
+```
+
+3.  Alternatively, build the NIF with CMake directly:
 
 ```bash
 cd samples/elixir_sample
@@ -28,7 +58,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ```
 
-3.  Compile and run the Elixir code:
+4.  Run the Elixir code:
 
 ```bash
 mix compile

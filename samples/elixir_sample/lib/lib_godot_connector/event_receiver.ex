@@ -1,4 +1,4 @@
-defmodule LibGodotSample.EventReceiver do
+defmodule LibGodotConnector.EventReceiver do
   use GenServer
 
   def start_link(opts \\ []) do

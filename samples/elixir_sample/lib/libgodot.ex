@@ -7,7 +7,7 @@ defmodule LibGodot do
     base = "libgodot_nif"
 
     candidates = [
-      Application.app_dir(:libgodot_sample, "priv/#{base}"),
+      Application.app_dir(:lib_godot_connector, "priv/#{base}"),
       Path.join([File.cwd!(), "priv", base])
     ]
 

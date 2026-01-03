@@ -34,21 +34,35 @@ target_include_directories(libgodot_nif PRIVATE
 
 target_link_libraries(libgodot_nif PRIVATE godot-cpp)
 
+# When building via `mix compile` (elixir_make), write artefacts to the Mix priv dir.
+# When building standalone, fall back to a local priv/ directory.
+if(DEFINED ENV{MIX_APP_PATH})
+  set(PRIV_DIR "$ENV{MIX_APP_PATH}/priv")
+else()
+  set(PRIV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/priv")
+endif()
+
+file(MAKE_DIRECTORY "${PRIV_DIR}")
+
 # NIF is expected to be a .so on both macOS and Linux.
 set_target_properties(libgodot_nif PROPERTIES
   OUTPUT_NAME "libgodot_nif"
   PREFIX ""
   SUFFIX ".so"
-  LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/priv
+  LIBRARY_OUTPUT_DIRECTORY "${PRIV_DIR}"
 )
 
 # When distributing precompiled artefacts, we want libgodot to live next to the NIF in priv/.
 if(APPLE)
   set(LIBGODOT_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../build/libgodot.dylib")
-  set(LIBGODOT_DEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/priv/libgodot.dylib")
+  set(LIBGODOT_DEST_PATH "${PRIV_DIR}/libgodot.dylib")
 else()
   set(LIBGODOT_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../build/libgodot.so")
-  set(LIBGODOT_DEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/priv/libgodot.so")
+  set(LIBGODOT_DEST_PATH "${PRIV_DIR}/libgodot.so")
+endif()
+
+if(NOT EXISTS "${LIBGODOT_SOURCE_PATH}")
+  message(FATAL_ERROR "Missing libgodot at '${LIBGODOT_SOURCE_PATH}'. Build it first (from repo root run ./build_libgodot.sh) or use precompiled artefacts via elixir_make.")
 endif()
 
 add_custom_command(
