@@ -183,6 +183,12 @@ static void host_destroy_instance() {
 
 int main(int argc, char *argv[]) {
     bool smoke = false;
+    // --bus-dry-run opens the lifecycle + P2P services, prints their
+    // readiness diagnostics, then returns 0 without entering
+    // run_command_loop. Deterministic termination — no timeouts, no
+    // signals — so smoke tests can assert the bus stood up without
+    // needing a QUIT round-trip against a running loop.
+    bool bus_dry_run = false;
     // Headless-by-default: the host's typical role is to serve elixir over
     // the bus with no window. --no-headless suppresses the flag so godot's
     // Main::setup brings up its normal DisplayServer — the same shape as
@@ -197,6 +203,7 @@ int main(int argc, char *argv[]) {
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--smoke") smoke = true;
+        else if (a == "--bus-dry-run") bus_dry_run = true;
         else if (a == "--no-headless") headless = false;
         else if (a == "--headless") headless = true;
         else if (a == "--libgodot" && i + 1 < argc) libpath = argv[++i];
@@ -243,6 +250,15 @@ int main(int argc, char *argv[]) {
                 libgodot_host::P2P_OUT_SERVICE_NAME, libgodot_host::P2P_IN_SERVICE_NAME);
     } else {
         fprintf(stderr, "libgodot_host: P2P bus not ready; send/recv will be no-ops\n");
+    }
+
+    if (bus_dry_run) {
+        // Every side has been opened; a live client-driven test can now
+        // proceed against the running services. --bus-dry-run stops here
+        // so the smoke suite can assert the readiness diagnostics without
+        // needing a QUIT round-trip against an active run_command_loop.
+        fprintf(stderr, "libgodot_host: bus dry-run OK\n");
+        return 0;
     }
 
     // Bus mode: open the lifecycle service and dispatch opcodes until QUIT.

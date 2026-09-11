@@ -90,8 +90,12 @@ run_case "smoke_bad_libgodot" 2 "dlopen" -- \
 # AND prints the WEFT_ICEORYX2_PATH diagnostic from weft::load_bus.
 # Both signals must be present: an exit code without the diagnostic
 # would be indistinguishable from an unrelated failure.
+# Runs with WEFT_ICEORYX2_PATH forced to a nonexistent path so the case
+# still exercises the load_bus failure fingerprint even when iceoryx2
+# IS built and reachable in the ambient env (as it should be after the
+# workspace has been provisioned).
 run_case "bus_unreachable_iceoryx2" 1 "libiceoryx2_ffi_c|WEFT_ICEORYX2_PATH" -- \
-    bash -c "cd '$PROJECT_DIR' && env LIBGODOT_PATH='$LIBGODOT' '$HOST' --script '$PROJECT_DIR/main.gd'"
+    bash -c "cd '$PROJECT_DIR' && env LIBGODOT_PATH='$LIBGODOT' WEFT_ICEORYX2_PATH=/nonexistent/libiceoryx2_ffi_c.dylib '$HOST' --script '$PROJECT_DIR/main.gd'"
 
 # Control: the same diagnostic text must NOT appear in a --smoke run (that
 # path never touches the bus). If it did, the pattern would be matching
@@ -182,16 +186,28 @@ else
     echo "SKIP [demo_project_no_modal_alert]: DEMO_DIR unset or missing project.godot"
 fi
 
-# Pair 5: P2P bus wiring.
-# Positive: the bus-mode diagnostic mentions the P2P service names,
-# proving the P2P open path runs (or attempts to run) alongside the
-# lifecycle open. Same iceoryx2-unreachable run as pair 2, so the
-# check is on the presence of the extra diagnostic line, not on
-# success — full end-to-end P2P testing needs iceoryx2 built, which
-# is a separate follow-up.
-run_case "p2p_diag_present" 1 "P2P bus (ready|not ready)|libgodot_host/p2p" -- \
-    env "LIBGODOT_PATH=$LIBGODOT" \
-    "$HOST" --script "$PROJECT_DIR/main.gd"
+# Pair 5: P2P bus wiring, exercised via --bus-dry-run.
+# --bus-dry-run opens the lifecycle + P2P services against the real
+# iceoryx2 loader path, prints the readiness diagnostics, then exits 0
+# deterministically. Lifecycle-controlled — no timeouts, no signals,
+# no polling. If iceoryx2 is not reachable the run exits non-zero
+# with weft's own WEFT_ICEORYX2_PATH diagnostic (also fine — either
+# way the test reveals the state of the bus rather than swallowing it).
+#
+# Positive: --bus-dry-run exits 0 AND the P2P service names appear in
+# stderr AND the "bus dry-run OK" fence log is present.
+p2p_out=$( bash -c "cd '$PROJECT_DIR' && env LIBGODOT_PATH='$LIBGODOT' '$HOST' --bus-dry-run --script '$PROJECT_DIR/main.gd' 2>&1" )
+p2p_rc=$?
+if [ "$p2p_rc" -eq 0 ] \
+   && echo "$p2p_out" | grep -qE "libgodot_host/p2p" \
+   && echo "$p2p_out" | grep -qE "bus dry-run OK"; then
+    echo "PASS [p2p_diag_present]"
+    pass=$((pass+1))
+else
+    echo "FAIL [p2p_diag_present]: exit $p2p_rc, missing P2P service name or dry-run OK line"
+    echo "----"; echo "$p2p_out" | tail -8 | sed 's/^/  /'; echo "----"
+    fail=$((fail+1)); failed_names+=("p2p_diag_present")
+fi
 
 # Control: the P2P diagnostic must NOT appear in --smoke output. If
 # open_p2p accidentally ran outside bus mode, the positive would pass
