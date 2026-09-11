@@ -19,7 +19,8 @@ defmodule LibGodotConnector.MixProject do
       start_permanent: Mix.env() == :prod,
       compilers: Mix.compilers() ++ [:elixir_make],
       make_clean: ["clean"],
-      deps: deps()
+      deps: deps(),
+      releases: releases()
     ]
     |> Keyword.merge(precompiled_opts())
   end
@@ -34,8 +35,59 @@ defmodule LibGodotConnector.MixProject do
   defp deps do
     [
       {:elixir_make, "~> 0.9", runtime: false},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      # Burrito is only pulled in the :prod release path; on hex it is
+      # {:burrito, "~> 1.6"} as of 2026. Keep it out of :dev/:test so
+      # the connector's own unit tests do not need it installed.
+      {:burrito, "~> 1.6", only: [:prod, :dev], runtime: false}
     ]
+  end
+
+  # ---------------------------------------------------------------------
+  # Burrito release: BEAM release + libgodot_host + libgodot.dylib +
+  # libiceoryx2_ffi_c.dylib bundled per platform.
+  #
+  # The three native paths come from env vars set by CI (or the
+  # operator) — mix.exs stays agnostic of where they were built.
+  # Local `mix release --overwrite` without them still produces a
+  # release; it just is not self-contained.
+  defp releases do
+    [
+      lib_godot_connector: [
+        steps: [:assemble, &stage_native_libs/1, &Burrito.wrap/1],
+        burrito: [
+          targets: [
+            macos_arm64: [os: :darwin, cpu: :aarch64],
+            macos_x86_64: [os: :darwin, cpu: :x86_64],
+            linux_x86_64: [os: :linux, cpu: :x86_64]
+          ]
+        ]
+      ]
+    ]
+  end
+
+  # Copy the three native artifacts named by the LIBGODOT_HOST,
+  # LIBGODOT_LIB, and ICEORYX2_LIB env vars into the release's
+  # priv/ directory. Silently skips any missing var so a developer
+  # can produce a partial release for inspection without breaking.
+  defp stage_native_libs(%Mix.Release{} = release) do
+    priv = Path.join(release.path, "lib/lib_godot_connector-#{release.version}/priv")
+    File.mkdir_p!(priv)
+
+    for env <- ~w(LIBGODOT_HOST LIBGODOT_LIB ICEORYX2_LIB),
+        path = System.get_env(env),
+        is_binary(path) do
+      cond do
+        File.exists?(path) ->
+          File.cp!(path, Path.join(priv, Path.basename(path)))
+          IO.puts("stage_native_libs: copied #{path}")
+
+        true ->
+          IO.warn("stage_native_libs: #{env}=#{path} does not exist; skipping")
+      end
+    end
+
+    release
   end
 
   defp precompiled_opts do
