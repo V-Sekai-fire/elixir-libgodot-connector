@@ -155,7 +155,10 @@ static bool host_create_instance() {
 
 static void host_destroy_instance() {
     if (!g_host.obj) return;
-    if (g_host.instance) g_host.instance->stop();
+    // libgodot_destroy_godot_instance (platform/macos/libgodot_macos.mm:67)
+    // already calls GodotInstance::stop() before teardown; calling stop()
+    // here first double-stops and crashes destroy() at offset +32 with
+    // KERN_INVALID_ADDRESS. Let destroy() own the whole wind-down.
     g_host.destroy(g_host.obj);
     g_host.obj = nullptr;
     g_host.instance = nullptr;
