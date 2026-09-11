@@ -45,8 +45,8 @@ defmodule LibGodotConnector.MixProject do
 
     priv_paths =
       case :os.type() do
-        {:win32, _} -> ["libgodot_nif.dll", "libgodot.*"]
-        _ -> ["libgodot_nif.so", "libgodot.*"]
+        {:win32, _} -> ["libgodot_nif.dll", "weft_client_nif.dll", "libgodot.*"]
+        _ -> ["libgodot_nif.so", "weft_client_nif.so", "libgodot.*"]
       end
 
     [

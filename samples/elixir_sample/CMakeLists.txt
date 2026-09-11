@@ -124,6 +124,39 @@ endif()
 
 enable_testing()
 
+# weft_client_nif: elixir side of the weft::harness lifecycle channel. Mirrors
+# thirdparty/weft-harness/proof/command_publisher.cpp — publishes commands and
+# waits on request-id-matched replies. Only builds when the weft-harness
+# subtree is present; without it there is no client protocol to embed.
+if(HOST_HAS_WEFT_HARNESS)
+  add_library(weft_client_nif MODULE ${CMAKE_CURRENT_SOURCE_DIR}/src/weft_client_nif.cpp)
+  target_include_directories(weft_client_nif PRIVATE
+    ${ERL_INCLUDE_PATH}
+    ${WEFT_HARNESS_DIR}/include
+  )
+  target_link_libraries(weft_client_nif PRIVATE weft::harness)
+  # BEAM's :erlang.load_nif calls dlopen with a .so extension on every
+  # unix, including macOS — force the suffix rather than trust
+  # CMAKE_SHARED_MODULE_SUFFIX (which is .dylib on darwin).
+  if(WIN32)
+    set_target_properties(weft_client_nif PROPERTIES
+      OUTPUT_NAME "weft_client_nif" PREFIX "" SUFFIX ".dll"
+      RUNTIME_OUTPUT_DIRECTORY "${PRIV_DIR}"
+      LIBRARY_OUTPUT_DIRECTORY "${PRIV_DIR}"
+    )
+  else()
+    set_target_properties(weft_client_nif PROPERTIES
+      OUTPUT_NAME "weft_client_nif" PREFIX "" SUFFIX ".so"
+      LIBRARY_OUTPUT_DIRECTORY "${PRIV_DIR}"
+    )
+  endif()
+  if(APPLE)
+    target_link_options(weft_client_nif PRIVATE "-undefined" "dynamic_lookup")
+  elseif(NOT WIN32)
+    target_link_libraries(weft_client_nif PRIVATE dl)
+  endif()
+endif()
+
 add_executable(libgodot_host ${CMAKE_CURRENT_SOURCE_DIR}/../libgodot_host/host.cpp)
 target_include_directories(libgodot_host PRIVATE
   ${GODOT_CPP_DIR}/include
