@@ -1,0 +1,79 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "contract-bus: the weft harness, a command loop over iceoryx2"
+abstract: >
+  The contract a transport layer and an interactor compose against: a command in,
+  reply bytes out, over iceoryx2 shared memory with no daemon and no copy. Two
+  pub/sub services carry the pair, correlated by an eight-byte request id, because
+  the generated ABI surface lists only the pub/sub builders and adding
+  request-response would mean extending that table unverified. Every plane and
+  every edge links this library and none of them links iceoryx2: the C ABI is
+  named in a signature file and turned into a dlsym dispatch table, so a missing
+  bus is a start-up failure with a message rather than a link error, and the build
+  graph holds no Rust artifact.
+authors:
+  - family-names: Lee
+    given-names: "K. S. Ernest (iFire)"
+    email: ernest.lee@chibifire.com
+    orcid: "https://orcid.org/0000-0003-4570-1436"
+license: Apache-2.0
+repository-code: "https://github.com/v-sekai-multiplayer-fabric/contract-bus"
+keywords:
+  - shared-memory
+  - zero-copy
+  - inter-process-communication
+  - iceoryx2
+
+references:
+
+  # ── The bus itself, dlopened rather than linked ──────────────────────────────
+  - type: software
+    title: "Eclipse iceoryx2: true zero-copy inter-process communication"
+    authors:
+      - name: "Eclipse iceoryx contributors"
+    year: 2026
+    version: v0.9.3
+    license: Apache-2.0 OR MIT
+    url: "https://github.com/eclipse-iceoryx/iceoryx2"
+    notes: >
+      Not vendored and not linked. `iceoryx2.sigs` names the C ABI functions the
+      harness calls and the generated table dlopens the library at start, so this
+      repository's build graph holds no Rust artifact at all. v0.9.3 is the version
+      both proof runs were made against: Windows 11 needed two workarounds, one of
+      them iceoryx2's own hardcoded `C:\Temp` (issue 1868, fixed after v0.9.3);
+      macOS 26.5.2 arm64 needed none and built clean from source.
+
+  # ── Vendored trees, each stating its own terms ───────────────────────────────
+  - type: software
+    title: "generate_stubs.py, from the Chromium source tree"
+    authors:
+      - name: "The Chromium Authors"
+    year: 2012
+    license: BSD-3-Clause
+    url: "https://chromium.googlesource.com/chromium/src/+/main/tools/generate_stubs/"
+    notes: >
+      Vendored at `thirdparty/generate_stubs`, with Chromium's LICENSE beside it.
+      Turns `iceoryx2.sigs` into the dlsym dispatch table. It emits no prototypes,
+      because Chromium's own callers include the real library headers and this
+      repository keeps none on the path, so `sigs_to_header.py` emits those from
+      the same signature file.
+  - type: software
+    title: "dlfcn-win32"
+    authors:
+      - family-names: Polla
+        given-names: Ramiro
+      - family-names: Gu
+        given-names: "Tiancheng (Timothy)"
+      - family-names: "Rohár"
+        given-names: Pali
+      - family-names: Habacker
+        given-names: Ralf
+    year: 2020
+    version: v1.4.2
+    license: MIT
+    url: "https://github.com/dlfcn-win32/dlfcn-win32"
+    notes: >
+      Vendored at `thirdparty/dlfcn-win32`, compiled only behind `if(WIN32)`.
+      MinGW ships no `<dlfcn.h>` and the generated stub table needs one; this
+      implements dlopen/dlsym/dlclose over LoadLibrary/GetProcAddress, which left
+      the generated code unchanged. Linux and macOS use the platform's own header.
