@@ -108,6 +108,20 @@ endif()
 
 # libgodot_host: standalone executable whose main() owns thread 0 on macOS.
 # Reuses the godot-cpp already built above so builds are incremental.
+# weft::harness lives vendored under thirdparty/ so the connector builds
+# standalone from a plain `git clone` (see git-subtree add in this branch's
+# history). QCBOR is nested beneath it at the path weft-harness's own
+# CMakeLists expects (libs/qcbor). iceoryx2 is NOT vendored — it is
+# dlopen'd at runtime via WEFT_ICEORYX2_PATH per the bus contract.
+set(WEFT_HARNESS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/weft-harness)
+if(EXISTS ${WEFT_HARNESS_DIR}/CMakeLists.txt AND EXISTS ${WEFT_HARNESS_DIR}/libs/qcbor/CMakeLists.txt)
+  add_subdirectory(${WEFT_HARNESS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/weft-harness EXCLUDE_FROM_ALL)
+  set(HOST_HAS_WEFT_HARNESS TRUE)
+else()
+  message(WARNING "weft::harness subtree missing at ${WEFT_HARNESS_DIR}; libgodot_host will build without the bus loop.")
+  set(HOST_HAS_WEFT_HARNESS FALSE)
+endif()
+
 add_executable(libgodot_host ${CMAKE_CURRENT_SOURCE_DIR}/../libgodot_host/host.cpp)
 target_include_directories(libgodot_host PRIVATE
   ${GODOT_CPP_DIR}/include
@@ -115,6 +129,10 @@ target_include_directories(libgodot_host PRIVATE
   ${LIBGODOT_BUILD_DIR}/gdextension
 )
 target_link_libraries(libgodot_host PRIVATE godot-cpp)
+if(HOST_HAS_WEFT_HARNESS)
+  target_link_libraries(libgodot_host PRIVATE weft::harness)
+  target_compile_definitions(libgodot_host PRIVATE LIBGODOT_HOST_HAS_WEFT_HARNESS=1)
+endif()
 if(NOT WIN32)
   target_link_libraries(libgodot_host PRIVATE dl)
 endif()
