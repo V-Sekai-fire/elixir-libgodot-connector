@@ -91,10 +91,38 @@ else
     pass=$((pass+1))
 fi
 
+# Pair 3: P2P bus wiring.
+# Positive: the bus-mode diagnostic mentions the P2P service names,
+# proving the P2P open path runs (or attempts to run) alongside the
+# lifecycle open. Same iceoryx2-unreachable run as pair 2, so the
+# check is on the presence of the extra diagnostic line, not on
+# success — full end-to-end P2P testing needs iceoryx2 built, which
+# is a separate follow-up.
+run_case "p2p_diag_present" 1 "P2P bus (ready|not ready)|libgodot_host/p2p" -- \
+    env "LIBGODOT_PATH=$LIBGODOT" \
+    "$HOST" --script "$PROJECT_DIR/main.gd"
+
+# Control: the P2P diagnostic must NOT appear in --smoke output. If
+# open_p2p accidentally ran outside bus mode, the positive would pass
+# on a code path that never wraps godot in the host loop.
+control_p2p_out=$( env "LIBGODOT_PATH=$LIBGODOT" \
+    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 )
+if echo "$control_p2p_out" | grep -qE "P2P bus (ready|not ready)|libgodot_host/p2p"; then
+    echo "FAIL [p2p_diag_only_on_bus_path]: smoke path emitted the P2P diagnostic"
+    fail=$((fail+1)); failed_names+=("p2p_diag_only_on_bus_path")
+else
+    echo "PASS [p2p_diag_only_on_bus_path]"
+    pass=$((pass+1))
+fi
+
 echo
 echo "== $pass passed, $fail failed =="
 if [ "$fail" -ne 0 ]; then
-    printf '  failed: %s\n' "${failed_names[@]}"
+    # Bash array expansion under `set -u` can trip when the array is empty
+    # (older bashes), so guard the printf explicitly.
+    if [ "${#failed_names[@]}" -gt 0 ]; then
+        printf '  failed: %s\n' "${failed_names[@]}"
+    fi
+    exit 1
 fi
-# exit at the very end so nothing before this can leak a stray 0 to the caller
-[ "$fail" -eq 0 ]
+exit 0

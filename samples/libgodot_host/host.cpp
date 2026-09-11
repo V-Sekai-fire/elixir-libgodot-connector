@@ -27,6 +27,7 @@
 #if defined(LIBGODOT_HOST_HAS_WEFT_HARNESS)
 #include "weft/command.hpp"
 #include "weft/loop.hpp"
+#include "p2p_bus.hpp"
 #endif
 
 // libgodot exports (see 4-entities/entities-godot/core/extension/libgodot.h).
@@ -40,8 +41,26 @@ typedef void (*libgodot_destroy_fn)(GDExtensionObjectPtr);
 // its own bookkeeping — otherwise reinterpret_cast'ing the returned
 // GodotInstance pointer through godot-cpp will read from an uninitialized
 // binding.
-static void host_initialize_module(godot::ModuleInitializationLevel /*p_level*/) {}
+static void host_initialize_module(godot::ModuleInitializationLevel p_level) {
+#if defined(LIBGODOT_HOST_HAS_WEFT_HARNESS)
+    // Register the P2P bus class at SCENE level so GDScript can `P2PBus.new()`.
+    // Only useful when the underlying services actually opened — GDScript can
+    // check via bus.is_ready(). Guarded by g_p2p.ready so the class does not
+    // exist in --smoke mode (which never calls open_p2p) — a bound class that
+    // dereferences the un-opened publisher/subscriber would crash on send/recv.
+    if (p_level == godot::MODULE_INITIALIZATION_LEVEL_SCENE && libgodot_host::g_p2p.ready) {
+        libgodot_host::register_p2p_bus();
+    }
+#else
+    (void)p_level;
+#endif
+}
 static void host_uninitialize_module(godot::ModuleInitializationLevel /*p_level*/) {}
+
+#if defined(LIBGODOT_HOST_HAS_WEFT_HARNESS)
+// Definition of the P2P singleton declared extern in p2p_bus.hpp.
+namespace libgodot_host { P2PState g_p2p; }
+#endif
 
 extern "C" GDExtensionBool GDE_EXPORT host_gdextension_init(
         GDExtensionInterfaceGetProcAddress p_get_proc_address,
@@ -187,6 +206,17 @@ int main(int argc, char *argv[]) {
     }
 
 #if defined(LIBGODOT_HOST_HAS_WEFT_HARNESS)
+    // P2P bus: open before entering the lifecycle loop so GDScript in the
+    // running project can send/recv frames from tick 0. Failure to open
+    // is logged but not fatal — a host without peers still serves elixir
+    // via the lifecycle service, and P2PBus.send/recv become no-ops.
+    if (libgodot_host::open_p2p()) {
+        fprintf(stderr, "libgodot_host: P2P bus ready ('%s' out, '%s' in)\n",
+                libgodot_host::P2P_OUT_SERVICE_NAME, libgodot_host::P2P_IN_SERVICE_NAME);
+    } else {
+        fprintf(stderr, "libgodot_host: P2P bus not ready; send/recv will be no-ops\n");
+    }
+
     // Bus mode: open the lifecycle service and dispatch opcodes until QUIT.
     fprintf(stderr, "libgodot_host: entering weft::run_command_loop on service '%s'\n",
             weft::COMMAND_SERVICE_NAME);
@@ -265,6 +295,10 @@ int main(int argc, char *argv[]) {
         case 0x03: { // ITERATE — reply body: [quit:u8][tick:u64 LE]
             if (!g_host.instance) return write_err("no_instance");
             if (cap < 1 + 1 + 8) return write_err("cap_too_small");
+            // Drain any P2P frames the subscriber has buffered before
+            // godot ticks, so GDScript sees this tick's inbound frames
+            // via P2PBus.recv() during _process.
+            (void)libgodot_host::drain_p2p_inbox();
             bool quit = g_host.instance->iteration();
             g_host.tick_count++;
             reply[0] = 0x00;
