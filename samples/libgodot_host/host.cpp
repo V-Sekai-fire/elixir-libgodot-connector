@@ -119,14 +119,30 @@ static void host_load_lib(const std::string &libpath) {
     if (!g_host.destroy) die("dlsym destroy");
 }
 
-// Build godot argv from three fields the outer caller controls (arg0,
-// optional -s script, optional --path project); ownership stays in
-// g_host.argv_storage so godot's Main::setup can hold the pointers.
-static void host_build_argv(const char *arg0, const std::string &script, const std::string &project) {
+// Build godot argv from fields the outer caller controls (arg0,
+// optional -s script, optional --path project, headless/headed toggle);
+// ownership stays in g_host.argv_storage so godot's Main::setup can hold
+// the pointers.
+//
+// Headless is the default because it is the only mode that works without
+// a compositor: no DisplayServer, no audio driver open, no renderer
+// context. Passing headless=false drops --headless so godot brings up
+// its normal DisplayServer (DisplayServerEmbedded via libgodot on macOS,
+// DisplayServer{Windows,Wayland,X11} on the other platforms) — the
+// caller-visible flag for that is `--no-headless`, matching Godot's
+// own `--headless` bool inverted with the `--no-*` convention. Callers
+// pass headless=false only when they actually have a window server to
+// render into; the host does no probing because getting that wrong
+// (windowed on a headless CI runner, say) produces a hard crash inside
+// Godot's platform init rather than a clean error.
+static void host_build_argv(const char *arg0, const std::string &script,
+                            const std::string &project, bool headless) {
     g_host.argv_storage.clear();
     g_host.argv.clear();
     g_host.argv_storage.emplace_back(arg0);
-    g_host.argv_storage.emplace_back("--headless");
+    if (headless) {
+        g_host.argv_storage.emplace_back("--headless");
+    }
     if (!script.empty()) {
         g_host.argv_storage.emplace_back("-s");
         g_host.argv_storage.emplace_back(script);
@@ -167,6 +183,13 @@ static void host_destroy_instance() {
 
 int main(int argc, char *argv[]) {
     bool smoke = false;
+    // Headless-by-default: the host's typical role is to serve elixir over
+    // the bus with no window. --no-headless suppresses the flag so godot's
+    // Main::setup brings up its normal DisplayServer — the same shape as
+    // `--headless` in Godot's own CLI, negated by the `--no-*` convention
+    // rather than invented terminology (Godot itself has no positive-form
+    // flag; windowed is the default when --headless is absent).
+    bool headless = true;
     int max_iterations = 8;
     std::string libpath;
     std::string script_path;
@@ -174,6 +197,8 @@ int main(int argc, char *argv[]) {
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--smoke") smoke = true;
+        else if (a == "--no-headless") headless = false;
+        else if (a == "--headless") headless = true;
         else if (a == "--libgodot" && i + 1 < argc) libpath = argv[++i];
         else if (a == "--script" && i + 1 < argc) script_path = argv[++i];
         else if (a == "--project" && i + 1 < argc) project_path = argv[++i];
@@ -185,7 +210,7 @@ int main(int argc, char *argv[]) {
 
     if (smoke) {
         // One-shot: build argv from CLI, create/start/iterate/stop/destroy, exit.
-        host_build_argv(argv[0], script_path, project_path);
+        host_build_argv(argv[0], script_path, project_path, headless);
         if (!host_create_instance()) return 3;
         if (!g_host.instance->start()) {
             fprintf(stderr, "libgodot_host: start() returned false\n");
@@ -235,8 +260,9 @@ int main(int argc, char *argv[]) {
         std::string default_script;
         std::string default_project;
         const char *arg0;
+        bool default_headless;
     };
-    AskCtx ctx{script_path, project_path, argv[0]};
+    AskCtx ctx{script_path, project_path, argv[0], headless};
 
     auto ask = [](void *ctx_v, const char *command, size_t len,
                   unsigned char *reply, size_t cap, int *stop) -> size_t {
@@ -276,7 +302,9 @@ int main(int argc, char *argv[]) {
                     p = nul ? nul + 1 : end;
                 }
             } else {
-                g_host.argv_storage.emplace_back("--headless");
+                if (ac->default_headless) {
+                    g_host.argv_storage.emplace_back("--headless");
+                }
                 if (!ac->default_script.empty()) {
                     g_host.argv_storage.emplace_back("-s");
                     g_host.argv_storage.emplace_back(ac->default_script);

@@ -52,11 +52,23 @@ run_case() {
     pass=$((pass+1))
 }
 
-# Pair 1: --smoke path.
-# Positive: a valid --smoke run exits 0 and prints "smoke OK".
-run_case "smoke_ok" 0 "smoke OK" -- \
-    env "LIBGODOT_PATH=$LIBGODOT" \
-    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3
+# Pair 1: --smoke path (headless, the default).
+# Positive: a valid --smoke run exits 0, prints "smoke OK", and does NOT
+# initialize a rendering device — Metal / Vulkan / OpenGL messages are
+# the fingerprint of a windowed init that should not fire in headless.
+control_headless_out=$( env "LIBGODOT_PATH=$LIBGODOT" \
+    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 )
+if echo "$control_headless_out" | grep -qE "smoke OK" \
+   && ! echo "$control_headless_out" | grep -qE "Metal [0-9]|Vulkan API [0-9]|OpenGL API [0-9]"; then
+    echo "PASS [smoke_ok]"
+    pass=$((pass+1))
+else
+    echo "FAIL [smoke_ok]: missing 'smoke OK' or renderer initialized in headless"
+    echo "----"
+    echo "$control_headless_out" | tail -6 | sed 's/^/  /'
+    echo "----"
+    fail=$((fail+1)); failed_names+=("smoke_ok")
+fi
 
 # Control: a --smoke run pointed at a libgodot that does not exist must
 # fail (proves the "smoke OK" assertion above is not a no-op that would
@@ -91,7 +103,40 @@ else
     pass=$((pass+1))
 fi
 
-# Pair 3: P2P bus wiring.
+# Pair 3: --no-headless brings up a rendering device.
+# Positive: --smoke --no-headless exits 0 AND the platform-specific
+# renderer log fires (Metal on macOS, Vulkan on Linux, D3D12/Vulkan on
+# Windows). Proves the flag actually reaches godot's Main::setup;
+# without it, the flag would be silently ignored and windowed mode would
+# look identical to headless.
+no_headless_out=$( env "LIBGODOT_PATH=$LIBGODOT" \
+    "$HOST" --smoke --no-headless --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 )
+if echo "$no_headless_out" | grep -qE "smoke OK" \
+   && echo "$no_headless_out" | grep -qE "Metal [0-9]|Vulkan API [0-9]|OpenGL API [0-9]|D3D12"; then
+    echo "PASS [no_headless_ok]"
+    pass=$((pass+1))
+else
+    echo "FAIL [no_headless_ok]: missing 'smoke OK' or renderer never initialized"
+    echo "----"
+    echo "$no_headless_out" | tail -6 | sed 's/^/  /'
+    echo "----"
+    fail=$((fail+1)); failed_names+=("no_headless_ok")
+fi
+
+# Control: --no-headless and the default (headless) run of the same
+# command must differ in the renderer signature — otherwise the flag is
+# a no-op and the positive above is decoration.
+if diff <(echo "$control_headless_out" | grep -E "Metal [0-9]|Vulkan API [0-9]|OpenGL API [0-9]|D3D12" || echo "no-renderer") \
+        <(echo "$no_headless_out"      | grep -E "Metal [0-9]|Vulkan API [0-9]|OpenGL API [0-9]|D3D12" || echo "no-renderer") \
+        >/dev/null; then
+    echo "FAIL [no_headless_differs_from_headless]: renderer signature was identical between --headless and --no-headless"
+    fail=$((fail+1)); failed_names+=("no_headless_differs_from_headless")
+else
+    echo "PASS [no_headless_differs_from_headless]"
+    pass=$((pass+1))
+fi
+
+# Pair 4: P2P bus wiring.
 # Positive: the bus-mode diagnostic mentions the P2P service names,
 # proving the P2P open path runs (or attempts to run) alongside the
 # lifecycle open. Same iceoryx2-unreachable run as pair 2, so the
