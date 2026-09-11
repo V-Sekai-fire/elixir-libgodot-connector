@@ -1,0 +1,4 @@
+# Local standalone builds (cmake target in ../elixir_sample uses the shared
+# godot-cpp; this ignore covers ad-hoc `c++ host.cpp -o libgodot_host` runs).
+libgodot_host
+build/

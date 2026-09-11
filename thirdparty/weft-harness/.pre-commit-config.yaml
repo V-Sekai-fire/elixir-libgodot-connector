@@ -1,0 +1,20 @@
+# Markdown only, and prettier only.
+#
+# This repository is a C++ header library whose prose carries most of its argument: what the
+# bus is, why nothing links iceoryx2, which platforms the proofs have run on. That prose is
+# the part a reader trusts and the part with no compiler behind it.
+#
+# The hooks stop at formatting on purpose. A linter that judges wording would be arguing with
+# documents this project writes deliberately -- long sentences, em dashes, prose in code
+# comments -- and a check nobody agrees with is a check people learn to skip.
+repos:
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        types: [markdown]
+        # Never reformat somebody else's documents. `libs/` is where repo checks out the
+        # libraries this build links -- QCBOR today -- and `thirdparty/` is what is vendored.
+        # Reformatting either forks a document this project does not own, and the diff would
+        # come back on the next sync.
+        exclude: '^(libs|thirdparty)/'

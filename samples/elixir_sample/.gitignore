@@ -1,0 +1,16 @@
+# Elixir / Mix
+/_build/
+/cover/
+/deps/
+/doc/
+/tmp/
+erl_crash.dump
+*.ez
+.elixir_ls/
+
+# NIF + host build tree
+/build/
+/priv/*.so
+/priv/*.dll
+/priv/*.dylib
+/priv/libgodot_host

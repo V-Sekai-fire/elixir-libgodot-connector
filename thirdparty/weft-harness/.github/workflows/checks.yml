@@ -1,0 +1,23 @@
+name: Checks
+
+on:
+  pull_request:
+  merge_group:
+
+# One run per pull request at a time; a new push cancels the run still in progress rather than
+# queuing behind it. `multiplayer-fabric-manuals` added this after several pushes during a
+# GitHub Actions incident left a six-run backlog on one pull request.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prek:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: pip install prek
+      - run: prek run --all-files --show-diff-on-failure --color always
