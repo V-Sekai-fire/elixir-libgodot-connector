@@ -52,12 +52,17 @@ run_case() {
     pass=$((pass+1))
 }
 
+# All --smoke / --no-headless runs cd into PROJECT_DIR first: libgodot
+# discovers project.godot from cwd on macOS and would otherwise pick up
+# whatever the shell started in (or fail). PROJECT_DIR must contain the
+# stub project.godot + main.gd the smoke path exercises.
+
 # Pair 1: --smoke path (headless, the default).
 # Positive: a valid --smoke run exits 0, prints "smoke OK", and does NOT
 # initialize a rendering device — Metal / Vulkan / OpenGL messages are
 # the fingerprint of a windowed init that should not fire in headless.
-control_headless_out=$( env "LIBGODOT_PATH=$LIBGODOT" \
-    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 )
+control_headless_out=$( ( cd "$PROJECT_DIR" && env "LIBGODOT_PATH=$LIBGODOT" \
+    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 ) )
 if echo "$control_headless_out" | grep -qE "smoke OK" \
    && ! echo "$control_headless_out" | grep -qE "Metal [0-9]|Vulkan API [0-9]|OpenGL API [0-9]"; then
     echo "PASS [smoke_ok]"
@@ -77,8 +82,7 @@ fi
 # die("dlopen"). Using a bogus --script does not qualify as a control
 # because godot's -s falls back to the project.godot in cwd.
 run_case "smoke_bad_libgodot" 2 "dlopen" -- \
-    env "LIBGODOT_PATH=/nonexistent/libgodot.dylib" \
-    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3
+    bash -c "cd '$PROJECT_DIR' && env LIBGODOT_PATH=/nonexistent/libgodot.dylib '$HOST' --smoke --script '$PROJECT_DIR/main.gd' --max-iterations 3"
 
 # Pair 2: bus mode without iceoryx2.
 # Positive: bus mode with no iceoryx2 loadable exits with weft's own
@@ -87,14 +91,13 @@ run_case "smoke_bad_libgodot" 2 "dlopen" -- \
 # Both signals must be present: an exit code without the diagnostic
 # would be indistinguishable from an unrelated failure.
 run_case "bus_unreachable_iceoryx2" 1 "libiceoryx2_ffi_c|WEFT_ICEORYX2_PATH" -- \
-    env "LIBGODOT_PATH=$LIBGODOT" \
-    "$HOST" --script "$PROJECT_DIR/main.gd"
+    bash -c "cd '$PROJECT_DIR' && env LIBGODOT_PATH='$LIBGODOT' '$HOST' --script '$PROJECT_DIR/main.gd'"
 
 # Control: the same diagnostic text must NOT appear in a --smoke run (that
 # path never touches the bus). If it did, the pattern would be matching
 # something unrelated and the positive above would be decoration.
-control_out=$( env "LIBGODOT_PATH=$LIBGODOT" \
-    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 )
+control_out=$( ( cd "$PROJECT_DIR" && env "LIBGODOT_PATH=$LIBGODOT" \
+    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 ) )
 if echo "$control_out" | grep -qE "libiceoryx2_ffi_c|WEFT_ICEORYX2_PATH"; then
     echo "FAIL [bus_diag_only_on_bus_path]: smoke path emitted the bus diagnostic"
     fail=$((fail+1)); failed_names+=("bus_diag_only_on_bus_path")
@@ -109,8 +112,8 @@ fi
 # Windows). Proves the flag actually reaches godot's Main::setup;
 # without it, the flag would be silently ignored and windowed mode would
 # look identical to headless.
-no_headless_out=$( env "LIBGODOT_PATH=$LIBGODOT" \
-    "$HOST" --smoke --no-headless --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 )
+no_headless_out=$( ( cd "$PROJECT_DIR" && env "LIBGODOT_PATH=$LIBGODOT" \
+    "$HOST" --smoke --no-headless --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 ) )
 if echo "$no_headless_out" | grep -qE "smoke OK" \
    && echo "$no_headless_out" | grep -qE "Metal [0-9]|Vulkan API [0-9]|OpenGL API [0-9]|D3D12"; then
     echo "PASS [no_headless_ok]"
@@ -136,7 +139,50 @@ else
     pass=$((pass+1))
 fi
 
-# Pair 4: P2P bus wiring.
+# Pair 4: real godot-demo-projects project loads and iterates without a
+# modal alert. Skipped when DEMO_DIR is unset — the manifest project
+# 4-entities/godot-demo-projects has to be synced first. Use a demo
+# whose main scene is compute/data-only (no display dependency) so a
+# headless run reaches iteration.
+if [ -n "${DEMO_DIR:-}" ] && [ -f "$DEMO_DIR/project.godot" ]; then
+    demo_out=$( env "LIBGODOT_PATH=$LIBGODOT" \
+        "$HOST" --smoke --project "$DEMO_DIR" --max-iterations 3 2>&1 )
+    # Positive: the demo actually boots and iterates to completion.
+    # "GodotInstance ptr" is the first log the host emits AFTER create
+    # returns non-null (so libgodot got past OS init + Main::setup +
+    # instance initialize); "ran N iteration(s)" confirms start() plus
+    # the iteration loop completed.
+    if echo "$demo_out" | grep -qE "GodotInstance ptr" \
+       && echo "$demo_out" | grep -qE "ran [0-9]+ iteration"; then
+        echo "PASS [demo_project_iterates]"
+        pass=$((pass+1))
+    else
+        echo "FAIL [demo_project_iterates]: demo did not boot to iteration"
+        echo "----"; echo "$demo_out" | tail -8 | sed 's/^/  /'; echo "----"
+        fail=$((fail+1)); failed_names+=("demo_project_iterates")
+    fi
+
+    # Control: the NSAlert regression fingerprint (os_macos.mm:347) must
+    # not appear. Without the entities-godot alert-suppression fix, any
+    # Main::setup error would call OS_MacOS::alert (line 347) instead of
+    # OS_MacOS_Headless::alert (line 1197) and pop a modal. This asserts
+    # that specific line number rather than the presence of "alert" text
+    # so that a stderr-printed diagnostic from the headless path stays
+    # legal.
+    if echo "$demo_out" | grep -qE "os_macos\.mm:347"; then
+        echo "FAIL [demo_project_no_modal_alert]: OS_MacOS::alert (line 347) fired — modal-alert regression"
+        echo "----"; echo "$demo_out" | tail -6 | sed 's/^/  /'; echo "----"
+        fail=$((fail+1)); failed_names+=("demo_project_no_modal_alert")
+    else
+        echo "PASS [demo_project_no_modal_alert]"
+        pass=$((pass+1))
+    fi
+else
+    echo "SKIP [demo_project_iterates]: DEMO_DIR unset or missing project.godot"
+    echo "SKIP [demo_project_no_modal_alert]: DEMO_DIR unset or missing project.godot"
+fi
+
+# Pair 5: P2P bus wiring.
 # Positive: the bus-mode diagnostic mentions the P2P service names,
 # proving the P2P open path runs (or attempts to run) alongside the
 # lifecycle open. Same iceoryx2-unreachable run as pair 2, so the
@@ -150,8 +196,8 @@ run_case "p2p_diag_present" 1 "P2P bus (ready|not ready)|libgodot_host/p2p" -- \
 # Control: the P2P diagnostic must NOT appear in --smoke output. If
 # open_p2p accidentally ran outside bus mode, the positive would pass
 # on a code path that never wraps godot in the host loop.
-control_p2p_out=$( env "LIBGODOT_PATH=$LIBGODOT" \
-    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 )
+control_p2p_out=$( ( cd "$PROJECT_DIR" && env "LIBGODOT_PATH=$LIBGODOT" \
+    "$HOST" --smoke --script "$PROJECT_DIR/main.gd" --max-iterations 3 2>&1 ) )
 if echo "$control_p2p_out" | grep -qE "P2P bus (ready|not ready)|libgodot_host/p2p"; then
     echo "FAIL [p2p_diag_only_on_bus_path]: smoke path emitted the P2P diagnostic"
     fail=$((fail+1)); failed_names+=("p2p_diag_only_on_bus_path")

@@ -185,7 +185,12 @@ if(NOT WIN32)
     COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/../libgodot_host/test/smoke_test.sh
     WORKING_DIRECTORY ${PRIV_DIR}
   )
+  # DEMO_DIR points at a manifest-side godot-demo-projects checkout so
+  # the demo cases (demo_project_iterates, demo_project_no_modal_alert)
+  # can run under ctest. When the checkout is absent the suite skips
+  # those cases quietly.
+  set(DEMO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../4-entities/godot-demo-projects/misc/matrix_transform")
   set_tests_properties(libgodot_host_smoke PROPERTIES
-    ENVIRONMENT "HOST=${PRIV_DIR}/libgodot_host;LIBGODOT=${LIBGODOT_DEST_PATH};PROJECT_DIR=${PRIV_DIR}"
+    ENVIRONMENT "HOST=${PRIV_DIR}/libgodot_host;LIBGODOT=${LIBGODOT_DEST_PATH};PROJECT_DIR=${PRIV_DIR};DEMO_DIR=${DEMO_DIR}"
   )
 endif()
