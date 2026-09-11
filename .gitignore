@@ -1,25 +1,21 @@
-# The directory Mix will write compiled artifacts to.
-/_build/
+build/
+libgodot_framework/libgodot.xcodeproj/project.xcworkspace/xcuserdata/
+libgodot_framework/libgodot/libgodot.a
 
-# If you run "mix test --cover", coverage assets end up here.
-/cover/
+.DS_Store
 
-# The directory Mix downloads your dependencies sources to.
-/deps/
+# Elixir sample scratch
+samples/elixir_sample/_build/
+samples/elixir_sample/priv/
+samples/elixir_sample/deps/
+samples/elixir_sample/doc/
+samples/elixir_sample/build/
 
-# Where third-party dependencies like ExDoc output generated docs.
-/doc/
+# Host binary scratch (cmake writes into elixir_sample/build; direct
+# c++ compiles into libgodot_host itself when developing standalone).
+samples/libgodot_host/libgodot_host
+samples/libgodot_host/build/
 
-# Temporary files, for example, from tests.
-/tmp/
-
-# If the VM crashes, it generates a dump, let's ignore it too.
-erl_crash.dump
-
-# Also ignore archive artifacts (built via "mix archive.build").
-*.ez
-
-# Ignore package tarball (built via "mix hex.build").
-starter_app-*.tar
-
-.elixir_ls/
+# Submodule sources we clone but don't track from this repo
+godot-cpp
+godot
