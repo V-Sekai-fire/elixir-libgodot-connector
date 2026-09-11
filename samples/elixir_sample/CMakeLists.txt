@@ -122,6 +122,8 @@ else()
   set(HOST_HAS_WEFT_HARNESS FALSE)
 endif()
 
+enable_testing()
+
 add_executable(libgodot_host ${CMAKE_CURRENT_SOURCE_DIR}/../libgodot_host/host.cpp)
 target_include_directories(libgodot_host PRIVATE
   ${GODOT_CPP_DIR}/include
@@ -139,3 +141,18 @@ endif()
 set_target_properties(libgodot_host PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PRIV_DIR}"
 )
+
+# Smoke tests with paired negative controls (CLAUDE.md rule 2). The suite
+# is a bash script rather than a cmake test-per-case because each case
+# depends on running the built host with a real libgodot.dylib next to it;
+# ctest just wraps the script. Skip on Windows where bash may not be on PATH.
+if(NOT WIN32)
+  add_test(
+    NAME libgodot_host_smoke
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/../libgodot_host/test/smoke_test.sh
+    WORKING_DIRECTORY ${PRIV_DIR}
+  )
+  set_tests_properties(libgodot_host_smoke PROPERTIES
+    ENVIRONMENT "HOST=${PRIV_DIR}/libgodot_host;LIBGODOT=${LIBGODOT_DEST_PATH};PROJECT_DIR=${PRIV_DIR}"
+  )
+endif()
